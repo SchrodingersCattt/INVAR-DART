@@ -153,6 +153,7 @@ def plot_ga(g, tec, density, target, pred_tec_stds, pred_density_stds, log_name)
     plt.plot(g, target)
     plt.ylabel("Target")
 
+
     plt.subplot(144)
     plt.xlabel("TEC")
     plt.ylabel("Density")
@@ -175,6 +176,8 @@ def plot_ga(g, tec, density, target, pred_tec_stds, pred_density_stds, log_name)
     ax = plt.gca()
     cbar = ax.figure.colorbar(sm, ax=ax, label="Generation")
     sc = ax.scatter(tec, density, c=g, linestyle='-', label="New Points", marker='x', s=2, cmap=cmap)
+    # Add horizontal error bars for TEC standard deviation
+    ax.errorbar(tec, density, xerr=pred_tec_stds, linestyle='None', color='black', alpha=0.5, capsize=2, linewidth=0.5)
     ax.legend(loc="upper right", fontsize=8)
 
 def regularize_precision(x):    
@@ -194,7 +197,8 @@ def regularize_precision(x):
     else:
         return x
 
-if __name__ == "__main__":
+
+def main():
     # Parse the log file
     import glob
     import stat_pareto
@@ -236,15 +240,23 @@ if __name__ == "__main__":
 
             # New Pareto Fronts.
             mask = np.logical_and(np.array(pred_tec_means) < 5, np.array(pred_density_means) < 8100)
+            # Check if any individuals meet the primary criteria
+            if not np.any(mask):
+                # If no individuals meet primary criteria, use secondary criteria
+                mask = np.logical_and(np.array(pred_tec_means) - np.array(pred_tec_stds) < 5, 
+                                      np.array(pred_density_means) < 8100)
+            
             best_individuals = regularize_precision(best_individuals)
             pred_tec_means  = regularize_precision(pred_tec_means)
             pred_density_means  = regularize_precision(pred_density_means)
+            pred_tec_stds = regularize_precision(pred_tec_stds)
             targets = regularize_precision(targets)
             for idx, g in enumerate(generations):
                 if not g in np.array(generations)[mask]:
                     continue
                 new_paretos[g] = {
                     'Pred Tec Means': pred_tec_means[idx], 
+                    'Pred Tec Stds': pred_tec_stds[idx],
                     'Pred Density Means': pred_density_means[idx], 
                     'Best Individuals': best_individuals[idx]
                 }
@@ -264,3 +276,10 @@ if __name__ == "__main__":
         except Exception as e:
             logging.error(f"Error plotting {log}: {e, traceback.print_exc()}")
             print(f"Error plotting {log}: {e}")
+
+
+if __name__ == "__main__":
+    from time import sleep
+    while True:
+        main()
+        sleep(10)

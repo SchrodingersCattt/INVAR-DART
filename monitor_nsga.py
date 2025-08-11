@@ -304,7 +304,7 @@ def save_results_to_csv(data, log_name):
         df.to_csv(f"{log_name}.csv")
         logging.info(f"{log_name}:\n {df.to_markdown()}")
 
-def monitor_nsga_logs(log_pattern="nsgs_*.log"):
+def monitor_nsga_logs(log_pattern="nsga_*.log"):
     """Monitor NSGA-II log files and generate reports"""
     logs = glob.glob(log_pattern)
     

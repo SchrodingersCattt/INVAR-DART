@@ -3,7 +3,7 @@ import glob
 import shutil
 
 
-TEC_MODELS = glob.glob("../../../iter00.finetune/dpa_v3.1/workspace*/model.ckpt.pt")
+TEC_MODELS = glob.glob("../../../iter01.finetune/dpa_v3_1/workspace*/model.ckpt.pt")
 # DENSITY_MODELS = glob.glob("/mnt/data_nas/guomingyu/PROPERTIES_PREDICTION/INVAR_density_only/mae_finetune_crossValidation/workspace*/model.ckpt.pt") 
 
 def collect_models(path_list, model_prefix):

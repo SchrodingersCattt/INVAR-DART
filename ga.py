@@ -2,7 +2,7 @@ import argparse
 import logging
 import numpy as np
 from target import target
-from constraints_utils import apply_constraints, parse_constraints, mass_to_molar, molar_to_mass, sigmoid
+from constraints_utils import apply_constraints, parse_constraints, mass_to_molar, sigmoid
 
 
 class GeneticAlgorithm:

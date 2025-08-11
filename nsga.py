@@ -154,9 +154,31 @@ class NSGAII:
             pred_density_mean_orig = norm2orig(pred_density_mean, mean=density_mean_orig, std=density_std_orig)
             pred_density_std_orig = pred_density_std * density_std_orig
             
+
+        # Apply penalties for TEC > 10 or density > 8200
+        penalty = 0
+        tec_penalty_factor = 1000  # Large penalty factor for TEC > 10
+        density_penalty_factor = 10  # Large penalty factor for density > 8200
+        
+        if pred_tec_mean_orig > 10:
+            # Penalty increases quadratically with how much TEC exceeds 10
+            tec_excess = pred_tec_mean_orig - 10
+            penalty += tec_penalty_factor * (tec_excess ** 2)
+            
+        if pred_density_mean_orig > 8500:
+            # Penalty increases quadratically with how much density exceeds 8200
+            density_excess = pred_tec_mean_orig - 8500
+            penalty += density_penalty_factor * (density_excess ** 2)
+        
+        # Apply penalties to the normalized values
+        pred_tec_mean += penalty
+        pred_density_mean += penalty
+            
         # Log physical meaningful values
         logging.info(f"Physical values - TEC mean: {pred_tec_mean_orig}, TEC std: {pred_tec_std_orig}, "
                     f"Density mean: {pred_density_mean_orig}, Density std: {pred_density_std_orig}")
+        if penalty > 0:
+            logging.info(f"Applied penalty: {penalty}")
        
         return pred_tec_mean, pred_tec_std, pred_density_mean, pred_density_std
 

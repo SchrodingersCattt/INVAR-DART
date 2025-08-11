@@ -59,15 +59,18 @@ def output_results(pareto_indices, Fe, Ni, Co, Cr, V, Cu, packing):
     print([list(x[:-1]) for x in pareto_df.to_numpy()])
 
 def plot_results(tec, density, pareto_front):
-    plt.figure(figsize=(8,8))
+    plt.figure(figsize=(8,5))
     plt.rcParams['font.size'] = 16
     plt.rcParams['font.family'] = "Arial"
     plt.scatter(tec, density, label="Orig. data", alpha=0.5, c='#848484')
     plt.scatter(pareto_front[:, 0], pareto_front[:, 1], c='r', marker="s", label="Orig. Pareto front")
-    
-    plt.scatter(ITER_0_pred[:, 0], ITER_0_pred[:, 1], c='g', marker="x", s=60, label="Iter.0 pred.")
-    plt.scatter(ITER_0_exp[:, 0], ITER_0_exp[:, 1], c='g', marker="s", s=60, label="Iter.0 exp.")
-    plt.scatter(ITER_1_pred[:, 0], ITER_1_pred[:, 1], c='b', marker="<", s=60, label="Iter.1 pred.")
+        
+    # Extract TEC, TEC std and density from ITER_1_pred
+    iter_1_pred_tec = ITER_1_pred[:, 0]
+    iter_1_pred_tec_std = ITER_1_pred[:, 1]
+    iter_1_pred_density = ITER_1_pred[:, 2]
+    plt.scatter(iter_1_pred_tec, iter_1_pred_density, marker="<", s=60, label="Iter.1 pred.")
+    plt.errorbar(iter_1_pred_tec, iter_1_pred_density, xerr=iter_1_pred_tec_std, fmt='none', elinewidth=1, capsize=3)
     
     plt.xlabel("TEC")
     plt.ylabel("Density")
@@ -77,12 +80,11 @@ def plot_results(tec, density, pareto_front):
     plt.show()
 
 
-ITER_0_pred = np.array([
-    [1.1698, 8077.52],
-    [3.2941, 7931.9691],
-    [2.4756, 8069.9608]
-
-])
+# ITER_0_pred = np.array([
+#     [1.1698, 8077.52],
+#     [3.2941, 7931.9691],
+#     [2.4756, 8069.9608]
+# ])
 # ITER_0_exp = np.array([
 #     [9.97, 8077.52],
 #     [12.58, 7931.9691],
@@ -90,11 +92,9 @@ ITER_0_pred = np.array([
 
 # ])
 ITER_1_pred = np.array([
-    # [2.7927, 7962.65],
-    [2.9967, 8074.0002],
-    [3.9871, 8099.47],
-    # [1.8654, 8059.53]
-    [2.4527, 7972.749]
+    [6.07, 1.69, 8088.1],
+    [5.35, 1.34, 8091.67],
+    [7.04, 2.06, 8092.86]
 ])
 
 if __name__ == "__main__":

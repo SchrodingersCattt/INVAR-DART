@@ -3,7 +3,7 @@ import logging
 import json
 import numpy as np
 from target import comp2struc, z_core, norm2orig, pred
-from constraints_utils import apply_constraints, parse_constraints, mass_to_molar, molar_to_mass, sigmoid
+from constraints_utils import apply_constraints, parse_constraints, mass_to_molar, molar_to_mass, sigmoid, calculate_constraint_penalty
 from tqdm import tqdm
 from deepmd.pt.infer.deep_eval import DeepProperty
 import glob
@@ -77,7 +77,11 @@ class NSGAII:
         logging.info("Initializing population.")
         population = [self.random_composition() for _ in range(population_size)]
         if self.constraints:
-            population = [apply_constraints(ind, self.elements, self.constraints) for ind in population]
+            constrained_population = []
+            for ind in population:
+                constrained_ind = apply_constraints(ind, self.elements, self.constraints)
+                constrained_population.append(constrained_ind)
+            population = constrained_population
         if not population:
             raise ValueError("Population initialization failed: population is empty.")
         return population
@@ -99,6 +103,12 @@ class NSGAII:
         4. Density std (maximize)
         """
         logging.info(f"Evaluating objectives for composition: {comp}")
+        
+        # Calculate constraint penalty
+        penalty = 0
+        if self.constraints:
+            penalty = calculate_constraint_penalty(comp, self.elements, self.constraints)
+            
         if self.constraints:
             # Apply constraints in mole fraction
             molar_comp = apply_constraints(comp, self.elements, self.constraints)
@@ -108,14 +118,23 @@ class NSGAII:
         # Get the individual objective values
         tec_mean, tec_std, density_mean, density_std = self.get_objective_values(self.elements, molar_comp)
         
+        # Apply penalties for constraint violations - add penalty to minimize objectives, subtract from maximize objectives
+        tec_mean += penalty      # Minimize TEC mean - add penalty
+        tec_std -= penalty       # Maximize TEC std - subtract penalty
+        density_mean += penalty  # Minimize density mean - add penalty
+        density_std -= penalty   # Maximize density std - subtract penalty
+        
         # Apply weights to objectives
         weighted_tec_mean = self.a * tec_mean
-        weighted_tec_std = self.b * (-tec_std)  # Negative because we want to maximize std but NSGA-II minimizes
+        weighted_tec_std = self.b * tec_std      # Already negated above for maximization
         weighted_density_mean = self.c * density_mean
-        weighted_density_std = self.d * (-density_std)  # Negative because we want to maximize std but NSGA-II minimizes
+        weighted_density_std = self.d * density_std  # Already negated above for maximization
         
-        # Return as array (these are all to be minimized)
-        return np.array([weighted_tec_mean, weighted_tec_std, weighted_density_mean, weighted_density_std])
+        # Return as array (these are all to be minimized in NSGA-II)
+        # For weighted_tec_std and weighted_density_std, since we want to maximize the original values,
+        # we need to negate them so that NSGA-II minimizes them
+        return np.array([weighted_tec_mean, -weighted_tec_std, weighted_density_mean, -weighted_density_std])
+
 
     def get_objective_values(self, elements, compositions):
         """
@@ -167,7 +186,7 @@ class NSGAII:
             
         if pred_density_mean_orig > 8500:
             # Penalty increases quadratically with how much density exceeds 8200
-            density_excess = pred_tec_mean_orig - 8500
+            density_excess = pred_density_mean_orig - 8500
             penalty += density_penalty_factor * (density_excess ** 2)
         
         # Apply penalties to the normalized values
@@ -268,7 +287,7 @@ class NSGAII:
         """
         Tournament selection based on dominance and crowding distance
         """
-        tournament_size = 2
+        tournament_size = 5
         selected = []
         
         for _ in range(len(population)):
@@ -365,6 +384,17 @@ class NSGAII:
             # Calculate crowding distances
             crowding_distances = self.calculate_crowding_distance(objective_values)
             
+            # Find the best individual before creating new population (elitism)
+            # The best individual is the first one in the first front
+            best_individual = None
+            if fronts and len(fronts) > 0 and len(fronts[0]) > 0:
+                first_front = fronts[0]
+                # In the first front, select the individual with the largest crowding distance
+                best_idx_in_front = max(first_front, key=lambda idx: crowding_distances[idx])
+                best_individual = self.population[best_idx_in_front]
+                best_objectives = objective_values[best_idx_in_front]
+                logging.info(f"Best individual in generation {generation}: {best_individual} with objectives {best_objectives}")
+            
             # Selection
             selected_population = self.tournament_selection(
                 self.population, objective_values, fronts, crowding_distances
@@ -422,6 +452,10 @@ class NSGAII:
                     idx_in_combined = front[idx_in_front]
                     new_population.append(combined_population[idx_in_combined])
                     
+            # Apply elitism: replace the first individual with the best from previous generation
+            if best_individual is not None:
+                new_population[0] = best_individual
+                    
             self.population = new_population[:self.population_size]
             
             # Log information about the first front (best solutions)
@@ -461,7 +495,7 @@ def run_nsga(output, elements, init_mode, population_size,
     nsga = NSGAII(
         elements=elements,
         population_size=population_size,
-        generations=8000,
+        generations=500,
         crossover_rate=crossover_rate,
         mutation_rate=mutation_rate,
         init_population=init_population,

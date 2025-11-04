@@ -1,1 +1,0 @@
-lmp -i in.lmp

@@ -2,7 +2,7 @@ import argparse
 import logging
 import numpy as np
 from target import target
-from constraints_utils import apply_constraints, parse_constraints, mass_to_molar, molar_to_mass, sigmoid
+from constraints_utils import apply_constraints, parse_constraints, mass_to_molar, sigmoid, calculate_constraint_penalty
 
 
 class GeneticAlgorithm:
@@ -83,15 +83,21 @@ class GeneticAlgorithm:
 
     def evaluate_fitness(self, comp, generation=None, get_density_mode='weighted_avg'):
         logging.info(f"Evaluating fitness for composition: {comp}")
+        
+        # Calculate constraint penalty
+        penalty = 0
         if self.constraints:
-            # Apply constraints in mole fraction
-            molar_comp = apply_constraints(comp, self.elements, self.constraints)
-            return target(self.elements, molar_comp, generation=generation,
-                         a=self.a, b=self.b, c=self.c, d=self.d,
-                         get_density_mode=self.get_density_mode)
-        return target(self.elements, comp, generation=generation,
-                     a=self.a, b=self.b, c=self.c, d=self.d,
-                     get_density_mode=self.get_density_mode)
+            penalty = calculate_constraint_penalty(comp, self.elements, self.constraints)
+            
+        # Evaluate target fitness (higher is better - we want low TEC and low density)
+        target_value = target(self.elements, comp, generation=generation,
+                             a=self.a, b=self.b, c=self.c, d=self.d,
+                             get_density_mode=self.get_density_mode)
+        
+        # Apply penalty (maximization problem - higher fitness is better)
+        fitness = target_value - penalty  # Penalty already scaled in calculate_constraint_penalty
+        
+        return fitness
 
     def select_parents(self):
         logging.info("Selecting parents using mode: %s", self.selection_mode)
@@ -107,9 +113,10 @@ class GeneticAlgorithm:
     def roulette_selection(self):
         fitness_scores = np.array([self.evaluate_fitness(comp) for comp in self.population])
         logging.info(f"Fitness scores: {fitness_scores}")
-        probabilities = sigmoid(fitness_scores)
-        probabilities = np.clip(probabilities, a_min=0, a_max=1)
-        probabilities = probabilities / np.sum(probabilities)
+        # For maximization, we use fitness scores directly (with offset to ensure positivity)
+        min_score = np.min(fitness_scores)
+        adjusted_scores = fitness_scores - min_score + 1e-10  # Ensure all scores are positive
+        probabilities = adjusted_scores / np.sum(adjusted_scores)
         logging.info(f"Selection probabilities: {probabilities}")
         indices = np.arange(self.population_size)
         selected_indices = np.random.choice(indices, size=self.population_size, p=probabilities)
@@ -121,7 +128,7 @@ class GeneticAlgorithm:
         for _ in range(self.population_size):
             indices = np.random.choice(len(self.population), tournament_size, replace=False)
             tournament = [self.population[i] for i in indices]
-            best_individual = max(tournament, key=self.evaluate_fitness)
+            best_individual = max(tournament, key=self.evaluate_fitness)  # Changed from min to max
             selected_population.append(best_individual)
         return selected_population
 
@@ -159,8 +166,12 @@ class GeneticAlgorithm:
         logging.info("Evolving.")
         for generation in range(self.generations):
             logging.info(f"Generation {generation}")
+            # Find the best individual before creating new population
+            best_individual_molar = max(self.population, key=self.evaluate_fitness)
+            best_score = self.evaluate_fitness(best_individual_molar, generation)
+            
             selected_population = self.select_parents()
-            if len(selected_population) % 2!= 0:
+            if len(selected_population) % 2 != 0:
                 selected_population.pop()
             new_population = []
             for i in range(0, len(selected_population), 2):
@@ -175,10 +186,11 @@ class GeneticAlgorithm:
                 new_population.append(offspring2)
             if not new_population:
                 raise ValueError("Evolution failed: new_population is empty.")
-            self.population = new_population
 
-            best_individual_molar = max(self.population, key=self.evaluate_fitness)
-            best_score = self.evaluate_fitness(best_individual_molar, generation)
+            # Apply elitism: replace the first individual with the best from previous generation
+            # new_population[0] = best_individual_molar
+            self.population = new_population
+            
             if self.constraints:
                 best_individual_molar = apply_constraints(best_individual_molar, self.elements, self.constraints)
             logging.info("Generation %d - Best Score: %f - Best Individual: %s", generation, best_score, best_individual_molar)
@@ -199,7 +211,7 @@ def run_ga(output, elements, init_mode, population_size, selection_mode,
     ga = GeneticAlgorithm(
         elements=elements,
         population_size=population_size,
-        generations=8000,
+        generations=500,
         crossover_rate=crossover_rate,
         mutation_rate=mutation_rate,
         selection_mode=selection_mode,
@@ -242,6 +254,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Define initial population
+    # mass fractions
     init_population_data = [
         [0.636, 0.286, 0.064, 0.014, 0.0, 0.0],
         [0.621, 0.286, 0.079, 0.014, 0.0, 0.0],
@@ -268,4 +281,4 @@ if __name__ == "__main__":
         "init_population": init_population_data
     }
 
-    run_ga(**params)
+    run_ga(**params) ## yielding molar fraction 

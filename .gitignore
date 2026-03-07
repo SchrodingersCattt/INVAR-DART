@@ -1,3 +1,12 @@
+
+# Finetune artifacts
+finetune/data/processed/
+finetune/runs/
+finetune/workspace*/
+finetune/**/__pycache__/
+finetune/**/*.log
+finetune/**/*.out
+finetune/**/*.png
 ## debug
 *.log
 *.png

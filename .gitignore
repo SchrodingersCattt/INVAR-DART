@@ -14,6 +14,7 @@ _workplace/
 *.nfs*
 *csv
 *.pt
+models/**/*.zip
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
